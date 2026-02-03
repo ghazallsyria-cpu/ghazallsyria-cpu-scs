@@ -1,5 +1,10 @@
-// Fix: Add Deno types reference to resolve "Cannot find name 'Deno'" error.
-/// <reference types="https://deno.land/x/deno/types/index.d.ts" />
+// Fix: Remove invalid Deno types reference and add a minimal Deno type definition
+// to resolve "Cannot find name 'Deno'" errors.
+declare const Deno: {
+  env: {
+    get: (key: string) => string | undefined;
+  };
+};
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
