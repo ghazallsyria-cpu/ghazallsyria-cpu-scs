@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
-import { TeacherDashboardData, StudentProgressSummary } from '../types';
+import { StudentProgressSummary } from '../types';
 
 const ChartBarIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -14,69 +13,33 @@ const ProgressBar: React.FC<{ value: number }> = ({ value }) => (
     </div>
 );
 
+const MOCK_STUDENT_PROGRESS: StudentProgressSummary[] = [
+    { studentId: '1', studentName: 'أحمد المصري', courseName: 'ميكانيك 1', lessonsCompleted: 8, totalLessons: 12, averageMastery: 85.2 },
+    { studentId: '2', studentName: 'فاطمة الشامي', courseName: 'كهرباء ومغناطيسية', lessonsCompleted: 10, totalLessons: 15, averageMastery: 91.5 },
+    { studentId: '3', studentName: 'علي الحمصي', courseName: 'ميكانيك 1', lessonsCompleted: 5, totalLessons: 12, averageMastery: 72.0 },
+    { studentId: '4', studentName: 'سارة الخالدي', courseName: 'الفيزياء الحديثة', lessonsCompleted: 3, totalLessons: 10, averageMastery: 78.8 },
+];
+
+
 const TeacherDashboard: React.FC = () => {
     // NOTE: In a real app, you would have a proper user object from auth.
     // We are simulating the teacher's name here.
-    const [teacherName, setTeacherName] = useState("الأستاذ علي");
+    const [teacherName] = useState("الأستاذ علي");
     const [studentProgress, setStudentProgress] = useState<StudentProgressSummary[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                // This RPC call would fetch data based on the logged-in teacher's RLS policies.
-                // A database function `get_teacher_student_progress()` would be ideal here.
-                // For demonstration, we simulate a join that RLS would secure.
-                // RLS Policy: "Teachers can view progress of students in their courses" is automatically applied.
-                const { data, error } = await supabase
-                    .from('lesson_progress')
-                    .select(`
-                        status,
-                        users ( id, full_name ),
-                        lessons ( id, modules ( courses ( id, title, lessons(count) ) ) )
-                    `);
+        // Simulate fetching data with a delay to show the loading state.
+        const timer = setTimeout(() => {
+            setStudentProgress(MOCK_STUDENT_PROGRESS);
+            setLoading(false);
+        }, 1000);
 
-                if (error) throw error;
-                
-                // This is a simplified transformation. A real implementation would be more robust.
-                const progressMap = new Map<string, any>();
-                data.forEach((item: any) => {
-                    const studentId = item.users.id;
-                    if (!progressMap.has(studentId)) {
-                        progressMap.set(studentId, {
-                            studentId: studentId,
-                            studentName: item.users.full_name,
-                            courseName: item.lessons.modules.courses.title,
-                            lessonsCompleted: 0,
-                            totalLessons: item.lessons.modules.courses.lessons[0].count,
-                            averageMastery: Math.random() * 30 + 60, // Mock mastery for now
-                        });
-                    }
-                    if (item.status === 'completed') {
-                        progressMap.get(studentId).lessonsCompleted++;
-                    }
-                });
-
-                setStudentProgress(Array.from(progressMap.values()));
-
-            } catch (err: any) {
-                setError("فشل تحميل بيانات الطلاب. تأكد من وجودك في دور المعلم وأن لديك صلاحيات الوصول.");
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchData();
+        return () => clearTimeout(timer);
     }, []);
 
     if (loading) {
         return <div className="text-center p-10">...جاري تحميل لوحة التحكم</div>;
-    }
-
-    if (error) {
-        return <div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-md text-center">{error}</div>;
     }
 
     if (studentProgress.length === 0) {

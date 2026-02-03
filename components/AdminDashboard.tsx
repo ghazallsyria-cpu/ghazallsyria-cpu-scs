@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
 import { AdminDashboardStats } from '../types';
 
 const UsersIcon = () => (
@@ -34,36 +33,31 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color }) => (
     </div>
 );
 
+const MOCK_ADMIN_STATS: AdminDashboardStats = {
+    totalUsers: 1428,
+    activeSubscriptions: 350,
+    monthlyRevenue: 1750,
+    aiRequestsToday: 489,
+    unvalidatedAiResponses: 15,
+    totalCourses: 4,
+};
+
 const AdminDashboard: React.FC = () => {
     const [stats, setStats] = useState<AdminDashboardStats | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                // This is the correct, secure pattern for fetching aggregate data.
-                // The Edge Function uses the SERVICE_ROLE_KEY to bypass RLS for these counts.
-                const { data, error } = await supabase.functions.invoke('admin-stats');
-                if (error) throw error;
-                setStats(data);
-            } catch (err: any) {
-                setError("فشل تحميل بيانات لوحة التحكم. تأكد من أنك في دور المدير وأن لديك صلاحيات الوصول.");
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
+        // Simulate fetching data with a delay to show the loading state.
+        const timer = setTimeout(() => {
+            setStats(MOCK_ADMIN_STATS);
+            setLoading(false);
+        }, 500);
 
-        fetchData();
+        return () => clearTimeout(timer);
     }, []);
 
     if (loading) {
         return <div className="text-center p-10">...جاري تحميل لوحة تحكم المدير</div>;
-    }
-
-    if (error) {
-        return <div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-md text-center">{error}</div>;
     }
 
     if (!stats) {

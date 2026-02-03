@@ -13,6 +13,7 @@
     "react-dom": "^19.2.4",
     "@supabase/supabase-js": "^2.45.0",
     "katex": "0.16.10",
+    "@google/genai": "1.39.0",
     "react-native": "^0.83.1"
   },
   "devDependencies": {
