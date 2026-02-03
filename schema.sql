@@ -126,6 +126,19 @@ CREATE TABLE public.student_answers (
 CREATE INDEX ON public.student_answers(student_id);
 CREATE INDEX ON public.student_answers(question_id);
 
+DROP TABLE IF EXISTS public.concept_mastery;
+CREATE TABLE public.concept_mastery (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    student_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    lesson_id uuid NOT NULL REFERENCES public.lessons(id) ON DELETE CASCADE,
+    concept_name text NOT NULL,
+    mastery_score float NOT NULL CHECK (mastery_score >= 0 AND mastery_score <= 1),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE(student_id, lesson_id, concept_name)
+);
+CREATE INDEX ON public.concept_mastery(student_id);
+CREATE INDEX ON public.concept_mastery(lesson_id);
+
 
 -- =================================================================
 -- AI Governance and Logging
@@ -209,6 +222,7 @@ ALTER TABLE public.course_enrollments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teacher_courses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lesson_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.student_answers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.concept_mastery ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read access on these tables
 ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
@@ -332,3 +346,65 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- =================================================================
+-- RPC Functions for Edge Functions
+-- =================================================================
+CREATE OR REPLACE FUNCTION get_teacher_dashboard_data(teacher_id_param uuid)
+RETURNS json AS $$
+DECLARE
+  result json;
+BEGIN
+  SELECT json_build_object(
+    'teacherName', (SELECT full_name FROM public.users WHERE id = teacher_id_param),
+    'studentProgress', (
+      SELECT COALESCE(json_agg(student_data), '[]'::json)
+      FROM (
+        SELECT
+          s.id AS "studentId",
+          s.full_name AS "studentName",
+          c.title AS "courseName",
+          (SELECT COUNT(*) FROM public.lesson_progress lp WHERE lp.student_id = s.id AND lp.status = 'completed' AND lp.lesson_id IN (SELECT l.id from lessons l join modules m on l.module_id = m.id where m.course_id = c.id)) AS "lessonsCompleted",
+          (SELECT COUNT(*) FROM public.lessons l JOIN public.modules m ON l.module_id = m.id WHERE m.course_id = c.id) AS "totalLessons",
+          COALESCE((SELECT AVG(cm.mastery_score) * 100 FROM public.concept_mastery cm WHERE cm.student_id = s.id AND cm.lesson_id IN (SELECT l.id from lessons l join modules m on l.module_id = m.id where m.course_id = c.id)), 0) AS "averageMastery"
+        FROM public.users s
+        JOIN public.course_enrollments ce ON s.id = ce.student_id
+        JOIN public.courses c ON ce.course_id = c.id
+        WHERE ce.course_id IN (
+          SELECT tc.course_id FROM public.teacher_courses tc WHERE tc.teacher_id = teacher_id_param
+        ) AND s.role = 'student'
+      ) student_data
+    )
+  ) INTO result;
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION create_subscription_and_payment(
+    p_user_id uuid,
+    p_plan_id uuid,
+    p_start_date timestamptz,
+    p_end_date timestamptz,
+    p_amount numeric,
+    p_txn_id text
+)
+RETURNS json AS $$
+DECLARE
+    new_subscription_id uuid;
+    result json;
+BEGIN
+    INSERT INTO public.user_subscriptions (user_id, plan_id, status, start_date, end_date)
+    VALUES (p_user_id, p_plan_id, 'active', p_start_date, p_end_date)
+    RETURNING id INTO new_subscription_id;
+
+    INSERT INTO public.payments (user_id, subscription_id, amount, status, payment_provider_txn_id)
+    VALUES (p_user_id, new_subscription_id, p_amount, 'succeeded', p_txn_id);
+    
+    SELECT json_build_object('id', s.id, 'status', s.status, 'endDate', s.end_date)
+    INTO result
+    FROM public.user_subscriptions s
+    WHERE s.id = new_subscription_id;
+
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
