@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAdminDashboardData } from '../services/adminDashboardService';
+import { supabase } from '../supabaseClient';
 import { AdminDashboardStats } from '../types';
 
 const UsersIcon = () => (
@@ -14,7 +14,6 @@ const SparklesIcon = () => (
 const ClipboardCheckIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
 );
-
 
 interface StatCardProps {
     title: string;
@@ -43,12 +42,14 @@ const AdminDashboard: React.FC = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // This simulates a call to a secure backend endpoint for admins.
-                // RLS for admins would grant access to all data for aggregation.
-                const result = await getAdminDashboardData();
-                setStats(result);
+                // This is the correct, secure pattern for fetching aggregate data.
+                // The Edge Function uses the SERVICE_ROLE_KEY to bypass RLS for these counts.
+                const { data, error } = await supabase.functions.invoke('admin-stats');
+                if (error) throw error;
+                setStats(data);
             } catch (err: any) {
-                setError("فشل تحميل بيانات لوحة التحكم. الرجاء المحاولة مرة أخرى.");
+                setError("فشل تحميل بيانات لوحة التحكم. تأكد من أنك في دور المدير وأن لديك صلاحيات الوصول.");
+                console.error(err);
             } finally {
                 setLoading(false);
             }
@@ -85,7 +86,6 @@ const AdminDashboard: React.FC = () => {
                 <StatCard title="إجمالي المقررات" value={stats.totalCourses} icon={<UsersIcon />} color="teal" />
             </div>
             
-            {/* Placeholder for future charts and detailed tables */}
             <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 text-center text-slate-500">
                 <p>مخططات ورسوم بيانية تفصيلية ستكون متاحة هنا قريباً.</p>
             </div>

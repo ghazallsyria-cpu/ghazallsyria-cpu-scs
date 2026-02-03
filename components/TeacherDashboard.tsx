@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getTeacherDashboardData } from '../services/dashboardService';
+import { supabase } from '../supabaseClient';
 import { TeacherDashboardData, StudentProgressSummary } from '../types';
 
 const ChartBarIcon = () => (
@@ -15,19 +15,54 @@ const ProgressBar: React.FC<{ value: number }> = ({ value }) => (
 );
 
 const TeacherDashboard: React.FC = () => {
-    const [data, setData] = useState<TeacherDashboardData | null>(null);
+    // NOTE: In a real app, you would have a proper user object from auth.
+    // We are simulating the teacher's name here.
+    const [teacherName, setTeacherName] = useState("الأستاذ علي");
+    const [studentProgress, setStudentProgress] = useState<StudentProgressSummary[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // This simulates a call to a secure backend endpoint that would
-                // leverage the teacher's RLS policies in Supabase.
-                const result = await getTeacherDashboardData();
-                setData(result);
+                // This RPC call would fetch data based on the logged-in teacher's RLS policies.
+                // A database function `get_teacher_student_progress()` would be ideal here.
+                // For demonstration, we simulate a join that RLS would secure.
+                // RLS Policy: "Teachers can view progress of students in their courses" is automatically applied.
+                const { data, error } = await supabase
+                    .from('lesson_progress')
+                    .select(`
+                        status,
+                        users ( id, full_name ),
+                        lessons ( id, modules ( courses ( id, title, lessons(count) ) ) )
+                    `);
+
+                if (error) throw error;
+                
+                // This is a simplified transformation. A real implementation would be more robust.
+                const progressMap = new Map<string, any>();
+                data.forEach((item: any) => {
+                    const studentId = item.users.id;
+                    if (!progressMap.has(studentId)) {
+                        progressMap.set(studentId, {
+                            studentId: studentId,
+                            studentName: item.users.full_name,
+                            courseName: item.lessons.modules.courses.title,
+                            lessonsCompleted: 0,
+                            totalLessons: item.lessons.modules.courses.lessons[0].count,
+                            averageMastery: Math.random() * 30 + 60, // Mock mastery for now
+                        });
+                    }
+                    if (item.status === 'completed') {
+                        progressMap.get(studentId).lessonsCompleted++;
+                    }
+                });
+
+                setStudentProgress(Array.from(progressMap.values()));
+
             } catch (err: any) {
-                setError("فشل تحميل بيانات الطلاب. الرجاء المحاولة مرة أخرى.");
+                setError("فشل تحميل بيانات الطلاب. تأكد من وجودك في دور المعلم وأن لديك صلاحيات الوصول.");
+                console.error(err);
             } finally {
                 setLoading(false);
             }
@@ -44,15 +79,15 @@ const TeacherDashboard: React.FC = () => {
         return <div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-md text-center">{error}</div>;
     }
 
-    if (!data) {
-        return <div className="text-center p-10">لا توجد بيانات لعرضها.</div>;
+    if (studentProgress.length === 0) {
+        return <div className="text-center p-10">لا يوجد طلاب مسجلون في مقرراتك الدراسية بعد.</div>;
     }
 
     return (
         <div className="space-y-8">
             <div>
                 <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">لوحة تحكم المعلم</h1>
-                <p className="text-slate-400">مرحباً بك، {data.teacherName}. هنا يمكنك متابعة تقدم طلابك.</p>
+                <p className="text-slate-400">مرحباً بك، {teacherName}. هنا يمكنك متابعة تقدم طلابك.</p>
             </div>
 
             <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
@@ -71,7 +106,7 @@ const TeacherDashboard: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="bg-slate-900 divide-y divide-slate-800">
-                            {data.studentProgress.map(student => (
+                            {studentProgress.map(student => (
                                 <tr key={student.studentId}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{student.studentName}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">{student.courseName}</td>

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import Header from './components/Header';
-import Introduction from './components/Introduction';
-import Whiteboard from './components/Whiteboard';
+import StudentDashboard from './components/StudentDashboard';
 import TeacherDashboard from './components/TeacherDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import Footer from './components/Footer';
@@ -21,12 +20,7 @@ const App: React.FC = () => {
         return <AdminDashboard />;
       case 'student':
       default:
-        return (
-          <>
-            <Introduction />
-            <Whiteboard />
-          </>
-        );
+        return <StudentDashboard />;
     }
   };
 
